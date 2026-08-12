@@ -1,0 +1,25 @@
+# --- Android / Gradle ---
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# --- IDE ---
+.idea/
+*.iml
+.DS_Store
+
+# --- TDLib artifacts (built locally via tools/build-tdlib.sh) ---
+# The .so binaries and the generated Java bindings are build outputs, not
+# source. Anyone cloning this runs tools/build-tdlib.sh to reproduce them —
+# which is also the only way to know what OpenSSL your crypto is linked to.
+app/src/main/jniLibs/
+app/src/main/java/org/drinkless/
+app/src/main/tdlib-build-info.txt
+tools/*.log

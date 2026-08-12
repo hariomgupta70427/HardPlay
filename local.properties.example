@@ -1,0 +1,21 @@
+# HardPlay — local build configuration
+#
+# Copy to `local.properties` and fill in. Never committed (see .gitignore).
+# Android Studio also writes `sdk.dir` into this file; leave that line alone.
+
+# --- Telegram developer credentials -----------------------------------------
+# Get these from https://my.telegram.org -> API development tools (free).
+# They identify the *app*, not your account. Without them HardPlay runs in
+# demo mode: full UI and player against seeded local data, no Telegram login.
+hardplay.telegram.apiId=0
+hardplay.telegram.apiHash=
+
+# --- Release signing (optional) ---------------------------------------------
+# Omit entirely and `assembleRelease` falls back to the debug key, which is
+# fine for sideloading onto your own device. Set these once you want a stable
+# signing identity so updates install over the top instead of requiring an
+# uninstall.
+#hardplay.keystore.path=../hardplay-release.jks
+#hardplay.keystore.storePassword=
+#hardplay.keystore.keyAlias=hardplay
+#hardplay.keystore.keyPassword=
