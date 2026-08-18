@@ -4,9 +4,25 @@
 # Android Studio also writes `sdk.dir` into this file; leave that line alone.
 
 # --- Telegram developer credentials -----------------------------------------
-# Get these from https://my.telegram.org -> API development tools (free).
+# Get these from https://my.telegram.org -> "API development tools" (free).
 # They identify the *app*, not your account. Without them HardPlay runs in
-# demo mode: full UI and player against seeded local data, no Telegram login.
+# demo mode: full UI against seeded local data, no Telegram login.
+#
+#   apiId    6-8 digits.        e.g. 2040123
+#   apiHash  32 hex characters. e.g. b18441a1ff607e10a989891a5462e627
+#
+# NOT a bot token. A @BotFather token looks like `8856503031:AAHc…`, and
+# splitting it at the colon produces a 10-digit "apiId" and a 35-character
+# "apiHash" that both look plausible and neither of which works — HardPlay signs
+# in as a user (phone + OTP) to read channel history, which a bot account cannot
+# do. The build detects this case and says so.
+#
+# Nothing else from my.telegram.org is needed. TDLib carries Telegram's server
+# RSA public keys and both the test and production datacentre configs internally;
+# those pages exist for people implementing MTProto from scratch.
+#
+# No quotes, no spaces around the `=`. This file is gitignored, so the values
+# never leave your machine.
 hardplay.telegram.apiId=0
 hardplay.telegram.apiHash=
 

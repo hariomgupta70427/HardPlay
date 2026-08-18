@@ -23,9 +23,74 @@ val localProperties: Properties =
 
 fun localProp(key: String): String? = localProperties.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() }
 
-val telegramApiId: String = localProp("hardplay.telegram.apiId") ?: "0"
-val telegramApiHash: String = localProp("hardplay.telegram.apiHash") ?: ""
-val hasTelegramCredentials = telegramApiId != "0" && telegramApiHash.isNotEmpty()
+// ---------------------------------------------------------------------------
+// Telegram credentials.
+//
+// Both values are validated here rather than trusted, because every way of
+// getting them wrong fails somewhere far from the cause:
+//
+//  * api_id is an int32 in MTProto, and TdApi.SetTdlibParameters declares it as a
+//    Java `int`. An over-large value used to surface as "error: integer number
+//    too large" in generated BuildConfig.java, with nothing pointing at the file
+//    that produced it.
+//  * api_hash is exactly 32 hex characters. Anything else reaches
+//    setTdlibParameters and comes back as an opaque Telegram auth error three
+//    screens into the login flow.
+//
+// The bot-token check is here because that is the mistake that actually happened:
+// a @BotFather token looks like `8856503031:AAHc…`, and splitting it at the colon
+// puts a 10-digit id in apiId and a 35-character secret in apiHash. Both halves
+// then look vaguely plausible, and a bot account cannot read channel history the
+// way this app needs to — so it is worth naming rather than leaving as two
+// separate format complaints.
+//
+// Unusable credentials fall back to demo mode rather than failing the build: a
+// build that can't run is worse than one that runs in demo.
+// ---------------------------------------------------------------------------
+val rawApiId: String? = localProp("hardplay.telegram.apiId")
+val parsedApiId: Int? = rawApiId?.toIntOrNull()
+val telegramApiId: String = (parsedApiId ?: 0).toString()
+val rawApiHash: String? = localProp("hardplay.telegram.apiHash")
+val telegramApiHash: String = rawApiHash ?: ""
+
+val apiHashLooksValid: Boolean = rawApiHash != null && Regex("^[0-9a-fA-F]{32}$").matches(rawApiHash)
+
+/** A @BotFather token's secret half: ~35 chars, conventionally opening "AA". */
+val looksLikeBotToken: Boolean =
+    rawApiHash != null && !apiHashLooksValid && rawApiHash.startsWith("AA") && rawApiHash.length > 32
+
+val credentialProblems: List<String> = buildList {
+    if (looksLikeBotToken) {
+        add(
+            "local.properties holds a @BotFather BOT TOKEN, not app credentials — " +
+                "apiHash is ${rawApiHash!!.length} chars starting \"AA\" and apiId is " +
+                "${rawApiId?.length ?: 0} digits, which is a token split at its colon. " +
+                "HardPlay signs in as a user (phone + OTP) to read channel history; a bot " +
+                "account cannot do that. Get api_id and api_hash from " +
+                "my.telegram.org -> API development tools.",
+        )
+    } else {
+        when {
+            rawApiId == null -> Unit
+            parsedApiId == null && rawApiId.all(Char::isDigit) ->
+                add(
+                    "hardplay.telegram.apiId has ${rawApiId.length} digits and does not fit " +
+                        "in a 32-bit int, so it cannot be a Telegram api_id (real ones are " +
+                        "6-8 digits). Check my.telegram.org.",
+                )
+            parsedApiId == null -> add("hardplay.telegram.apiId is not a number.")
+            parsedApiId <= 0 -> add("hardplay.telegram.apiId must be positive.")
+        }
+        if (rawApiHash != null && !apiHashLooksValid) {
+            add(
+                "hardplay.telegram.apiHash is ${rawApiHash.length} characters; a Telegram " +
+                    "api_hash is exactly 32 hexadecimal characters.",
+            )
+        }
+    }
+}
+
+val hasTelegramCredentials = parsedApiId != null && parsedApiId > 0 && apiHashLooksValid
 
 // ---------------------------------------------------------------------------
 // TDLib presence.
@@ -106,7 +171,11 @@ android {
             "-opt-in=kotlin.RequiresOptIn",
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
+            // FlowRow — the wrapping chip rows in the filter sheet and tag editor.
+            "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
             "-opt-in=androidx.compose.animation.ExperimentalSharedTransitionApi",
+            // FontVariation — needed to drive Archivo's wght/wdth axes.
+            "-opt-in=androidx.compose.ui.text.ExperimentalTextApi",
             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
         )
     }
@@ -119,6 +188,14 @@ android {
     sourceSets {
         getByName("main") {
             java.srcDir(if (hasTdlib) "src/tdlib/kotlin" else "src/no-tdlib/kotlin")
+        }
+        // Room's exported schemas, as instrumentation assets. `MigrationTestHelper`
+        // reads them from the *test* APK's assets, so without this the migration test
+        // fails with "Cannot find the schema file" rather than with anything about the
+        // migration — and the one code path a clean install never exercises stays
+        // untested.
+        getByName("androidTest") {
+            assets.srcDir("$projectDir/schemas")
         }
     }
 
@@ -133,10 +210,35 @@ android {
         )
     }
 
+    // -----------------------------------------------------------------------
+    // ABI splits.
+    //
+    // libtdjni.so is 17–27 MB per ABI, so a universal APK is ~92 MB of which two
+    // thirds is native code for architectures the target device cannot run. This
+    // app is distributed by copying an APK to a phone, which makes that a real
+    // cost rather than a theoretical one — the per-ABI output is around 45 MB.
+    //
+    // The universal APK is kept as well: it is the one to reach for when you don't
+    // know what you're installing onto, and it is what an emulator wants.
+    // -----------------------------------------------------------------------
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     lint {
         // TdApi.java is generated and enormous; linting it is pure noise.
-        ignore += "TypographyDashes"
-        disable += setOf("MissingTranslation", "ExtraTranslation")
+        disable += setOf("TypographyDashes", "MissingTranslation", "ExtraTranslation")
+        // Media3 marks most of its extension surface @UnstableApi. It is not a
+        // Kotlin opt-in marker — it is enforced by a bundled lint check — and the
+        // TDLib DataSource, the load control and the renderers factory are all on
+        // that surface by necessity. Silenced here rather than annotated in a dozen
+        // places, since the version is pinned in libs.versions.toml anyway.
+        disable += "UnsafeOptInUsageError"
         abortOnError = false
     }
 }
@@ -192,6 +294,7 @@ dependencies {
     implementation(libs.media3.session)
 
     implementation(libs.coil.compose)
+    implementation(libs.okio)
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.biometric)
@@ -204,6 +307,7 @@ dependencies {
     testImplementation(libs.room.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.room.testing)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
@@ -215,4 +319,5 @@ gradle.projectsEvaluated {
     val tdlibState = if (hasTdlib) "present" else "MISSING (run tools/build-tdlib.sh) — demo mode only"
     val credState = if (hasTelegramCredentials) "present" else "MISSING (see local.properties.example)"
     logger.lifecycle("HardPlay: TDLib bindings $tdlibState; Telegram credentials $credState")
+    credentialProblems.forEach { logger.warn("HardPlay: $it") }
 }

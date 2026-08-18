@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      TDLib speaks MTProto directly to Telegram's datacenters over raw TCP.
+      INTERNET is the only network permission needed, and there is deliberately
+      nothing here for analytics, ads or crash reporting (PRD §9).
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:name=".HardPlayApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name_discreet"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.HardPlay.Starting"
+        android:usesCleartextTraffic="false"
+        tools:targetApi="34">
+
+        <!--
+          The real activity carries no launcher filter. Which icon and label the
+          launcher shows is decided by the two aliases below, swapped at runtime
+          via PackageManager.setComponentEnabledSetting from Settings.
+
+          supportsPictureInPicture, plus smallestScreenSize in configChanges: PiP is
+          a configuration change like any other, and without it listed the activity
+          is recreated on the way into the window — which tears down the player and
+          restarts the stream, i.e. the opposite of what PiP is for.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.HardPlay.Starting"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Discreet: neutral name and glyph. Enabled by default. -->
+        <activity-alias
+            android:name=".Launcher"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name_discreet"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Branded: real identity. Off unless the user turns off the disguise. -->
+        <activity-alias
+            android:name=".LauncherBranded"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_branded"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!--
+          Hands one media file to another app on request ("open in another app").
+
+          Not exported, and granting URI permissions per-intent rather than holding a
+          permission: the receiving player gets read access to exactly the file the
+          user chose, for as long as that task lives. The single root in file_paths.xml
+          is TDLib's media directory — see the comment there for why the session
+          database is deliberately not reachable through this provider.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.media"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Hilt supplies the WorkManager factory; the default initialiser must go. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>

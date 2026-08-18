@@ -17,6 +17,9 @@
 # Media3 extractors are looked up by class name in a few code paths.
 -keep class androidx.media3.extractor.** { *; }
 
-# Keep our custom DataSource factory — referenced from a MediaSource built at
-# runtime, which R8's static analysis cannot always see through.
--keep class com.hardplay.player.** { *; }
+# Keep our custom DataSource and the MediaDataSource used for frame extraction —
+# both are referenced from objects built at runtime (a MediaSource, and
+# MediaMetadataRetriever's native side), which R8's static analysis cannot always
+# see through. Note the package: this rule read `com.hardplay.player.**` until it
+# was noticed that no such package exists, so it had been protecting nothing.
+-keep class com.hardplay.playback.** { *; }

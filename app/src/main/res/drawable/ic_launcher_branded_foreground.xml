@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Branded mark. An ember play chevron inside a hairline film frame — the same
+  visual idea as the buffering mark, so the icon and the app agree.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#3D2229"
+        android:pathData="M30,30h48v2H30zM30,76h48v2H30zM30,30h2v48h-2zM76,30h2v48h-2z" />
+    <path android:pathData="M46,40l24,14 -24,14z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:endX="70"
+                android:endY="68"
+                android:startX="46"
+                android:startY="40"
+                android:type="linear">
+                <item android:color="#FFFF4D2E" android:offset="0" />
+                <item android:color="#FFFF8A3D" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

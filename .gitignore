@@ -9,6 +9,8 @@ captures/
 *.aab
 *.jks
 *.keystore
+# Kotlin 2.x session scratch dir, created next to the build. Not source.
+.kotlin/
 
 # --- IDE ---
 .idea/
@@ -23,3 +25,7 @@ app/src/main/jniLibs/
 app/src/main/java/org/drinkless/
 app/src/main/tdlib-build-info.txt
 tools/*.log
+docs/ui-overhaul-plan.md
+HardPlay_PRD.md
+CLAUDE.md
+CLAUDE.md

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Oxblood & Ember, mirrored from ui/theme/Color.kt. These exist only for the
+      few things Compose cannot own: the splash screen, the window background and
+      the adaptive icon. Compose UI must read HardPlayTheme.colors, never these.
+    -->
+    <color name="ink_black">#FF08070A</color>
+    <color name="oxblood">#FF1A0B10</color>
+    <color name="ember_low">#FFFF4D2E</color>
+    <color name="ember_high">#FFFF8A3D</color>
+    <color name="bone">#FFF5F0E8</color>
+    <color name="ash_rose">#FF6B5C5F</color>
+</resources>

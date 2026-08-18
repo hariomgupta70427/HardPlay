@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Where "open in another app" is allowed to hand out a URI.
+
+  Exactly one root, pointing at TDLib's media directory and nothing else. The
+  `../no_backup/` prefix is deliberate and it does work: FileProvider builds each
+  root as `new File(getFilesDir(), path)` and then calls `getCanonicalFile()` on it,
+  so this resolves to `<data>/no_backup/tdlib-files` — the directory
+  `TdlibTelegramGateway` passes to `setTdlibParameters` as `filesDirectory`.
+
+  It is expressed this way rather than by moving TDLib's files under `files/`
+  because relocating `filesDirectory` would orphan every chunk already downloaded
+  and make the app re-fetch a library's worth of media for a cosmetic reason.
+
+  Note what is *not* here: no `<root-path>`, no cache directory, and above all not
+  `<files-path path=".">`, any of which would put the TDLib session database one
+  content:// URI away from another app.
+-->
+<paths>
+    <files-path
+        name="telegram_media"
+        path="../no_backup/tdlib-files/" />
+</paths>

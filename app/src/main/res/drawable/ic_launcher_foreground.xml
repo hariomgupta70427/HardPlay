@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Discreet mark. A dull filing-tab glyph in ash rose on oxblood: it should look
+  like a stock utility nobody would open. This is the default launcher icon and
+  the splash icon.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#6B5C5F"
+        android:pathData="M32,34h44a4,4 0 0 1 4,4v32a4,4 0 0 1 -4,4H32a4,4 0 0 1 -4,-4V38a4,4 0 0 1 4,-4zM32,40v28h44V40z" />
+    <path
+        android:fillColor="#6B5C5F"
+        android:pathData="M38,46h32v4H38zM38,56h22v4H38z" />
+</vector>

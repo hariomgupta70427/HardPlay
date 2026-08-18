@@ -1,0 +1,630 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "e8cd3499230593106dd1a7f40cdd16aa",
+    "entities": [
+      {
+        "tableName": "channels",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`chatId` INTEGER NOT NULL, `title` TEXT NOT NULL, `username` TEXT, `photoFileId` INTEGER, `knownMessageCount` INTEGER NOT NULL, `sortIndex` INTEGER NOT NULL, `enabled` INTEGER NOT NULL DEFAULT 1, `addedAt` INTEGER NOT NULL, PRIMARY KEY(`chatId`))",
+        "fields": [
+          {
+            "fieldPath": "chatId",
+            "columnName": "chatId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "username",
+            "columnName": "username",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "photoFileId",
+            "columnName": "photoFileId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "knownMessageCount",
+            "columnName": "knownMessageCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortIndex",
+            "columnName": "sortIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "addedAt",
+            "columnName": "addedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "chatId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_channels_sortIndex",
+            "unique": false,
+            "columnNames": [
+              "sortIndex"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_channels_sortIndex` ON `${TABLE_NAME}` (`sortIndex`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "media",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chatId` INTEGER NOT NULL, `messageId` INTEGER NOT NULL, `type` TEXT NOT NULL, `caption` TEXT NOT NULL, `title` TEXT NOT NULL, `date` INTEGER NOT NULL, `durationSeconds` INTEGER, `width` INTEGER, `height` INTEGER, `thumbnailFileId` INTEGER, `previewFileId` INTEGER, `posterPath` TEXT, `minithumbnail` BLOB, `posterFileId` INTEGER, `posterForMessageId` INTEGER, `fileId` INTEGER NOT NULL, `remoteFileId` TEXT NOT NULL, `remoteUniqueId` TEXT NOT NULL, `fileSizeBytes` INTEGER NOT NULL, `tagsParsed` INTEGER NOT NULL DEFAULT 0, `lastSyncedAt` INTEGER NOT NULL, FOREIGN KEY(`chatId`) REFERENCES `channels`(`chatId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "localId",
+            "columnName": "localId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chatId",
+            "columnName": "chatId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "messageId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "caption",
+            "columnName": "caption",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationSeconds",
+            "columnName": "durationSeconds",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "width",
+            "columnName": "width",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "height",
+            "columnName": "height",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "thumbnailFileId",
+            "columnName": "thumbnailFileId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "previewFileId",
+            "columnName": "previewFileId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "posterPath",
+            "columnName": "posterPath",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "minithumbnail",
+            "columnName": "minithumbnail",
+            "affinity": "BLOB",
+            "notNull": false
+          },
+          {
+            "fieldPath": "posterFileId",
+            "columnName": "posterFileId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "posterForMessageId",
+            "columnName": "posterForMessageId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "fileId",
+            "columnName": "fileId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteFileId",
+            "columnName": "remoteFileId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteUniqueId",
+            "columnName": "remoteUniqueId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileSizeBytes",
+            "columnName": "fileSizeBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tagsParsed",
+            "columnName": "tagsParsed",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastSyncedAt",
+            "columnName": "lastSyncedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "localId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_media_chatId_messageId",
+            "unique": true,
+            "columnNames": [
+              "chatId",
+              "messageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_media_chatId_messageId` ON `${TABLE_NAME}` (`chatId`, `messageId`)"
+          },
+          {
+            "name": "index_media_date",
+            "unique": false,
+            "columnNames": [
+              "date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_date` ON `${TABLE_NAME}` (`date`)"
+          },
+          {
+            "name": "index_media_chatId",
+            "unique": false,
+            "columnNames": [
+              "chatId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_chatId` ON `${TABLE_NAME}` (`chatId`)"
+          },
+          {
+            "name": "index_media_type",
+            "unique": false,
+            "columnNames": [
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_type` ON `${TABLE_NAME}` (`type`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "channels",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "chatId"
+            ],
+            "referencedColumns": [
+              "chatId"
+            ]
+          }
+        ]
+      },
+      {
+        "ftsVersion": "FTS4",
+        "ftsOptions": {
+          "tokenizer": "simple",
+          "tokenizerArgs": [],
+          "contentTable": "",
+          "languageIdColumnName": "",
+          "matchInfo": "FTS4",
+          "notIndexedColumns": [],
+          "prefixSizes": [],
+          "preferredOrder": "ASC"
+        },
+        "contentSyncTriggers": [],
+        "tableName": "media_fts",
+        "createSql": "CREATE VIRTUAL TABLE IF NOT EXISTS `${TABLE_NAME}` USING FTS4(`caption` TEXT NOT NULL, `tags` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "caption",
+            "columnName": "caption",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tags",
+            "columnName": "tags",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "rowid"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "tags",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `normalised` TEXT NOT NULL, `auto` INTEGER NOT NULL DEFAULT 0, `createdAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalised",
+            "columnName": "normalised",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "auto",
+            "columnName": "auto",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_tags_normalised",
+            "unique": true,
+            "columnNames": [
+              "normalised"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_tags_normalised` ON `${TABLE_NAME}` (`normalised`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "media_tag",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER NOT NULL, `tagId` INTEGER NOT NULL, PRIMARY KEY(`localId`, `tagId`), FOREIGN KEY(`localId`) REFERENCES `media`(`localId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`tagId`) REFERENCES `tags`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "localId",
+            "columnName": "localId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tagId",
+            "columnName": "tagId",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "localId",
+            "tagId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_media_tag_tagId",
+            "unique": false,
+            "columnNames": [
+              "tagId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_tag_tagId` ON `${TABLE_NAME}` (`tagId`)"
+          },
+          {
+            "name": "index_media_tag_localId",
+            "unique": false,
+            "columnNames": [
+              "localId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_tag_localId` ON `${TABLE_NAME}` (`localId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "media",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "localId"
+            ],
+            "referencedColumns": [
+              "localId"
+            ]
+          },
+          {
+            "table": "tags",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "tagId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "playback",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER NOT NULL, `positionMs` INTEGER NOT NULL, `durationMs` INTEGER NOT NULL, `completed` INTEGER NOT NULL, `playCount` INTEGER NOT NULL DEFAULT 0, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`localId`), FOREIGN KEY(`localId`) REFERENCES `media`(`localId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "localId",
+            "columnName": "localId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "positionMs",
+            "columnName": "positionMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completed",
+            "columnName": "completed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "playCount",
+            "columnName": "playCount",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "localId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": [
+          {
+            "table": "media",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "localId"
+            ],
+            "referencedColumns": [
+              "localId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "sync_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`chatId` INTEGER NOT NULL, `newestIndexedMessageId` INTEGER NOT NULL, `oldestIndexedMessageId` INTEGER NOT NULL, `backfillComplete` INTEGER NOT NULL, `indexedCount` INTEGER NOT NULL, `lastSyncAt` INTEGER NOT NULL, `lastError` TEXT, PRIMARY KEY(`chatId`), FOREIGN KEY(`chatId`) REFERENCES `channels`(`chatId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "chatId",
+            "columnName": "chatId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newestIndexedMessageId",
+            "columnName": "newestIndexedMessageId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldestIndexedMessageId",
+            "columnName": "oldestIndexedMessageId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "backfillComplete",
+            "columnName": "backfillComplete",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "indexedCount",
+            "columnName": "indexedCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSyncAt",
+            "columnName": "lastSyncAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "chatId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": [
+          {
+            "table": "channels",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "chatId"
+            ],
+            "referencedColumns": [
+              "chatId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "favourites",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER NOT NULL, `addedAt` INTEGER NOT NULL, PRIMARY KEY(`localId`), FOREIGN KEY(`localId`) REFERENCES `media`(`localId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "localId",
+            "columnName": "localId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addedAt",
+            "columnName": "addedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "localId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_favourites_addedAt",
+            "unique": false,
+            "columnNames": [
+              "addedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_favourites_addedAt` ON `${TABLE_NAME}` (`addedAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "media",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "localId"
+            ],
+            "referencedColumns": [
+              "localId"
+            ]
+          }
+        ]
+      }
+    ],
+    "views": [
+      {
+        "viewName": "library_row",
+        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT\n            m.localId            AS localId,\n            m.chatId             AS chatId,\n            m.messageId          AS messageId,\n            m.type               AS type,\n            m.title              AS title,\n            m.caption            AS caption,\n            m.date               AS date,\n            m.durationSeconds    AS durationSeconds,\n            m.fileSizeBytes      AS fileSizeBytes,\n            m.width              AS width,\n            m.height             AS height,\n            m.thumbnailFileId    AS thumbnailFileId,\n            m.previewFileId      AS previewFileId,\n            m.posterPath         AS posterPath,\n            m.minithumbnail      AS minithumbnail,\n            m.posterFileId       AS posterFileId,\n            m.posterForMessageId AS posterForMessageId,\n            m.fileId             AS fileId,\n            m.remoteFileId       AS remoteFileId,\n            c.title              AS channelTitle,\n            c.enabled            AS channelEnabled,\n            p.positionMs         AS positionMs,\n            p.durationMs         AS playbackDurationMs,\n            p.completed          AS completed,\n            p.playCount          AS playCount,\n            p.updatedAt          AS lastPlayedAt,\n            f.addedAt            AS favouritedAt\n        FROM media m\n        INNER JOIN channels c ON c.chatId = m.chatId\n        LEFT JOIN playback p ON p.localId = m.localId\n        LEFT JOIN favourites f ON f.localId = m.localId"
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e8cd3499230593106dd1a7f40cdd16aa')"
+    ]
+  }
+}

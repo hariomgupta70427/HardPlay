@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Real identity. Only ever shown after the biometric gate, and on the
+         branded launcher alias if the user turns the disguise off. -->
+    <string name="app_name">HardPlay</string>
+
+    <!-- Discreet identity: what the launcher, the app list and any backup
+         manifest see by default. Dull on purpose. -->
+    <string name="app_name_discreet">Archive</string>
+
+    <string name="unlock_prompt_title">Unlock</string>
+    <string name="unlock_prompt_subtitle">Verify to continue</string>
+    <string name="unlock_cancel">Cancel</string>
+</resources>
