@@ -137,6 +137,15 @@ interface TelegramGateway {
      * values are dead at that point, while `remoteFileId` still resolves. Turns a
      * full re-index into a lazy repair.
      *
+     * **This is a weak repair, and not the one to reach for first.** `getRemoteFile`
+     * is documented as an offline method: it parses the stored id and hands back a
+     * file id without contacting Telegram, so it cannot refresh the file reference
+     * embedded in that id, and the file it returns has no *source* attached — no
+     * message TDLib can go back to when the reference turns out to be stale. The
+     * result is an id that looks valid and refuses to download. Prefer
+     * [refreshMessage], which gives TDLib the message and therefore a file it knows
+     * how to repair.
+     *
      * @param kind which file type TDLib should resolve the reference as. It is not
      *   cosmetic: `getRemoteFile` takes the type as an argument and a photo asked for
      *   as a video comes back refused. Defaults to video because the streaming path
@@ -146,6 +155,31 @@ interface TelegramGateway {
         remoteFileId: String,
         kind: TelegramMediaKind = TelegramMediaKind.VIDEO,
     ): GatewayResult<Int>
+
+    /**
+     * Re-read one message and return its media with live file ids.
+     *
+     * **The repair that actually works, and the answer to "old content stops
+     * playing".** Telegram rotates the file reference inside every remote file id.
+     * TDLib repairs an expired reference by itself — but only for a file it can
+     * trace back to a *source*, and a message is that source. A file id that reached
+     * the app any other way (notably [fileIdForRemoteId], which never talks to the
+     * server) has no source registered, so nothing can refresh it and the download
+     * fails permanently.
+     *
+     * Asking for the message again re-establishes that link, which is why this
+     * repairs items the app indexed weeks ago and [fileIdForRemoteId] does not.
+     * `(chatId, messageId)` is also the only addressing the app holds that never
+     * goes stale — file ids are session-scoped and references expire, while a
+     * message id is permanent.
+     *
+     * Cheap when TDLib still has the message locally, and one round trip when it
+     * doesn't.
+     */
+    suspend fun refreshMessage(
+        chatId: Long,
+        messageId: Long,
+    ): GatewayResult<TelegramMessage>
 
     // ----------------------------------------------------------------- cache
 

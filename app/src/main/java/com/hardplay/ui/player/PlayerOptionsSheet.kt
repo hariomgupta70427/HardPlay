@@ -348,7 +348,7 @@ private fun SheetTitle(title: String) {
             .fillMaxWidth()
             .padding(start = Space.gutter, end = Space.gutter, bottom = Space.sm),
     ) {
-        Text(text = "OPTIONS", style = HardPlayTheme.type.overline, color = colors.accent)
+        Text(text = "OPTIONS", style = HardPlayTheme.type.overline, color = colors.muted)
         Box(Modifier.height(4.dp))
         Text(
             text = title,

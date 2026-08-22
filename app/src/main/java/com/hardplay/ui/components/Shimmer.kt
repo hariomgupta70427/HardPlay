@@ -4,8 +4,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +45,20 @@ fun Modifier.shimmer(shape: Shape? = null): Modifier {
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(Motion.ShimmerPeriod, easing = LinearEasing),
+            // Keyframes with a dwell at the end, not a plain linear tween.
+            //
+            // `RepeatMode.Restart` over a linear tween snaps the band back to the left
+            // edge the instant it leaves the right one, and that discontinuity is
+            // visible: the effect reads as a conveyor belt rather than as light passing
+            // over a surface. Holding at 1f for the tail of each cycle puts a beat of
+            // stillness between sweeps, which is what a highlight actually looks like —
+            // and it hides the reset, because nothing is moving when it happens.
+            animation = keyframes {
+                durationMillis = Motion.ShimmerPeriod
+                0f at 0 using LinearEasing
+                1f at Motion.ShimmerPeriod - ShimmerDwellMs using LinearEasing
+                1f at Motion.ShimmerPeriod
+            },
             repeatMode = RepeatMode.Restart,
         ),
         label = "sweep",
@@ -87,7 +101,7 @@ fun ShimmerLine(
         modifier
             .width(width)
             .height(height)
-            .shimmer(HardPlayTheme.shapes.chip),
+            .shimmer(BarShape),
     )
 }
 
@@ -102,7 +116,7 @@ fun ShimmerLineFill(
         modifier
             .fillMaxWidth(fraction)
             .height(height)
-            .shimmer(HardPlayTheme.shapes.chip),
+            .shimmer(BarShape),
     )
 }
 
@@ -154,3 +168,20 @@ fun PosterSkeleton(
         }
     }
 }
+
+/**
+ * 2dp, not the 4dp control radius these bars used to borrow.
+ *
+ * A placeholder line is 9–11dp tall, so a 4dp radius rounds nearly half its height at
+ * each end and the bar arrives as a lozenge — the pill shape this design system does
+ * not use, on the one screen a new user sees first.
+ */
+private val BarShape = RoundedCornerShape(2.dp)
+
+/**
+ * Stillness at the end of each sweep, in milliseconds.
+ *
+ * Long enough to read as a pause between pulses rather than as a stutter, and it is
+ * what conceals the band's reset to the left edge.
+ */
+private const val ShimmerDwellMs = 340

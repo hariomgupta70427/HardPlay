@@ -10,8 +10,17 @@ import org.junit.Test
 /**
  * A *wrong* poster is worse than a missing one — it looks like the app cannot tell
  * its own items apart — so most of these tests are about what must not be paired.
+ *
+ * Every id here goes through [mid], which applies TDLib's 20-bit message-id shift.
+ * That is not decoration. These tests used to build messages with raw ids like 10 and
+ * 11, where "within 3 ids" means what it appears to; real TDLib ids differ by 1,048,576
+ * per message, so the adjacency rung was dead on device while this file stayed green.
+ * Testing with production id shapes is the only thing that would have caught it.
  */
 class PosterPairingTest {
+
+    /** A server message number as TDLib would report it: `server_id shl 20`. */
+    private fun mid(serverId: Long): Long = serverId shl 20
 
     private fun video(
         id: Long,
@@ -38,7 +47,7 @@ class PosterPairingTest {
         mini: ByteArray?,
         album: Long,
     ) = TelegramMessage(
-        messageId = id,
+        messageId = mid(id),
         chatId = -100,
         date = date,
         caption = "",
@@ -60,9 +69,9 @@ class PosterPairingTest {
     @Test
     fun `screenshot posted just before a bare video becomes its poster`() {
         val result = PosterPairing.pair(listOf(photo(id = 10, thumb = 900), video(id = 11)))
-        assertEquals(900, result.posterFor[11L])
+        assertEquals(900, result.posterFor[mid(11)])
         // And the still is recorded as serving that video, so the grid can fold it.
-        assertEquals(11L, result.stillServes[10L])
+        assertEquals(mid(11), result.stillServes[mid(10)])
     }
 
     @Test
@@ -75,7 +84,35 @@ class PosterPairingTest {
                 video(id = 31, album = 5),
             ),
         )
-        assertEquals(700, result.posterFor[31L])
+        assertEquals(700, result.posterFor[mid(31)])
+    }
+
+    @Test
+    fun `an album of several videos does not hand them all the same still`() {
+        // The regression that mattered most: `associateBy` kept one photo per album, so
+        // every video in a mixed album was given it and only one of them could be right.
+        val result = PosterPairing.pair(
+            listOf(
+                photo(id = 10, thumb = 100, album = 7),
+                video(id = 11, album = 7),
+                photo(id = 12, thumb = 200, album = 7),
+                video(id = 13, album = 7),
+            ),
+        )
+        val posters = listOfNotNull(result.posterFor[mid(11)], result.posterFor[mid(13)])
+        assertEquals(2, posters.size)
+        assertEquals(posters.size, posters.distinct().size)
+        // Each still is consumed exactly once.
+        assertEquals(2, result.stillServes.size)
+    }
+
+    @Test
+    fun `a video in an album with no photos falls back to adjacency, not to any still`() {
+        // The album proves nothing here, so the id and time windows still have to apply.
+        val result = PosterPairing.pair(
+            listOf(photo(id = 90, thumb = 400), video(id = 12, album = 8)),
+        )
+        assertNull(result.posterFor[mid(12)])
     }
 
     @Test
@@ -97,7 +134,7 @@ class PosterPairingTest {
     @Test
     fun `a distant photo is not paired`() {
         val result = PosterPairing.pair(listOf(photo(id = 1), video(id = 40)))
-        assertNull(result.posterFor[40L])
+        assertNull(result.posterFor[mid(40)])
     }
 
     @Test
@@ -107,7 +144,7 @@ class PosterPairingTest {
         val result = PosterPairing.pair(
             listOf(photo(id = 10, date = 1_000), video(id = 11, date = 99_000)),
         )
-        assertNull(result.posterFor[11L])
+        assertNull(result.posterFor[mid(11)])
     }
 
     @Test
@@ -117,7 +154,7 @@ class PosterPairingTest {
         val result = PosterPairing.pair(
             listOf(photo(id = 10, thumb = 100), video(id = 11), photo(id = 12, thumb = 200)),
         )
-        assertEquals(100, result.posterFor[11L])
+        assertEquals(100, result.posterFor[mid(11)])
     }
 
     @Test
@@ -126,6 +163,9 @@ class PosterPairingTest {
             listOf(video(id = 10), photo(id = 11, thumb = 300), video(id = 12)),
         )
         assertEquals(1, result.stillServes.size)
+        // And the poster map agrees. It used to be written unconditionally, so both
+        // videos were given the still and only the fold-away map deduplicated.
+        assertEquals(1, result.posterFor.size)
     }
 
     @Test
@@ -136,7 +176,7 @@ class PosterPairingTest {
         val result = PosterPairing.pair(
             listOf(photo(id = 10, thumb = 900, preview = 1_900), video(id = 11)),
         )
-        assertEquals(1_900, result.posterFor[11L])
+        assertEquals(1_900, result.posterFor[mid(11)])
     }
 
     @Test

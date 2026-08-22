@@ -20,6 +20,8 @@ import com.hardplay.data.db.entity.MediaEntity
 import com.hardplay.data.db.entity.MediaType
 import com.hardplay.data.db.entity.TagEntity
 import com.hardplay.data.prefs.SettingsStore
+import com.hardplay.data.repo.MediaFileRepair
+import com.hardplay.data.repo.MediaFileRole
 import com.hardplay.data.repo.PlaybackRepository
 import com.hardplay.data.repo.TagRepository
 import com.hardplay.di.AppScope
@@ -31,13 +33,17 @@ import com.hardplay.ui.image.FrameHarvester
 import com.hardplay.ui.image.PosterSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -64,6 +70,7 @@ import javax.inject.Inject
  *    instead, because its bytes arrive through TDLib rather than through Media3 and
  *    nothing else would ever report on them.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     savedState: SavedStateHandle,
@@ -74,6 +81,7 @@ class PlayerViewModel @Inject constructor(
     private val settings: SettingsStore,
     private val playerFactory: TelegramPlayerFactory,
     private val gateway: TelegramGateway,
+    private val repair: MediaFileRepair,
     private val externalOpen: ExternalOpen,
     private val frameHarvester: FrameHarvester,
     @AppScope private val appScope: CoroutineScope,
@@ -257,7 +265,7 @@ class PlayerViewModel @Inject constructor(
         refreshExternalState()
 
         if (isPhoto) {
-            observePhotoDownload(entity.fileId)
+            observePhotoDownload()
             // Photos have no player. Counting the open still matters — it is what
             // History and "most watched" are about — and nothing else will do it,
             // since there is no playback to end.
@@ -291,18 +299,29 @@ class PlayerViewModel @Inject constructor(
      * viewer had nothing to say during the wait — so opening a large still looked
      * like the app had simply decided to show the blurry version. TDLib reports a
      * contiguous prefix rather than a percentage, so the fraction is derived from it.
+     *
+     * Driven off the *row* rather than off the file id read once at load. The artwork
+     * path repairs a refused id and writes the fresh one back, and when it does, this
+     * follows it. Watching the id captured at load instead left the readout pinned at
+     * zero for exactly the items that needed repairing — the ones that looked broken.
      */
-    private fun observePhotoDownload(fileId: Int) {
+    private fun observePhotoDownload() {
         viewModelScope.launch {
-            gateway.observeFile(fileId).collect { state ->
-                val fraction = when {
-                    state.isDownloadingCompleted -> 1f
-                    state.expectedSize > 0L ->
-                        (state.readableUntil.toFloat() / state.expectedSize).coerceIn(0f, 1f)
-                    else -> 0f
+            mediaDao.observeRow(localId)
+                .map { it?.fileId ?: NO_FILE }
+                .distinctUntilChanged()
+                .flatMapLatest { id ->
+                    if (id == NO_FILE) emptyFlow() else gateway.observeFile(id)
                 }
-                _ui.update { it.copy(photoProgress = fraction) }
-            }
+                .collect { state ->
+                    val fraction = when {
+                        state.isDownloadingCompleted -> 1f
+                        state.expectedSize > 0L ->
+                            (state.readableUntil.toFloat() / state.expectedSize).coerceIn(0f, 1f)
+                        else -> 0f
+                    }
+                    _ui.update { it.copy(photoProgress = fraction) }
+                }
         }
     }
 
@@ -312,6 +331,9 @@ class PlayerViewModel @Inject constructor(
                 fileId = entity.fileId,
                 sizeBytes = entity.fileSizeBytes,
                 remoteFileId = entity.remoteFileId,
+                // Travels with the item so the streaming source can repair a refused
+                // file id on its own thread without reaching back into Room.
+                localId = entity.localId,
             ),
         )
         .setMediaId(entity.localId.toString())
@@ -355,9 +377,26 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun retry() {
-        _ui.update { it.copy(error = null) }
-        player.prepare()
-        player.play()
+        _ui.update { it.copy(error = null, buffering = true) }
+        viewModelScope.launch {
+            // Drop any remembered failure first. A manual retry is the user asking
+            // us to go and check again, and honouring it while a cached "this item
+            // cannot be repaired" still stands would make the button do nothing.
+            repair.forget(localId)
+
+            val entity = mediaDao.byId(localId)
+            if (entity != null && !_ui.value.isPhoto) {
+                // Rebuilt from the row rather than re-preparing the existing item, so
+                // a repair that some other surface has already paid for is picked up.
+                // Position is restored explicitly because setMediaItem resets it.
+                val resumeAt = player.currentPosition.coerceAtLeast(0L)
+                player.setMediaItem(buildMediaItem(entity))
+                if (resumeAt > 0L) player.seekTo(resumeAt)
+                _ui.update { it.copy(fileId = entity.fileId) }
+            }
+            player.prepare()
+            player.play()
+        }
     }
 
     // ----------------------------------------------------------------- tracks
@@ -404,7 +443,24 @@ class PlayerViewModel @Inject constructor(
     fun refreshExternalState() {
         val fileId = _ui.value.fileId
         if (fileId == NO_FILE) return
-        viewModelScope.launch { _external.value = externalOpen.state(fileId) }
+        viewModelScope.launch {
+            val state = externalOpen.state(fileId)
+            // "Absent" from a stored id is ambiguous: TDLib either has none of the
+            // file, or does not recognise the handle at all. Repairing before
+            // believing it is what stops the action reporting nothing-downloaded for
+            // an item that is in fact sitting complete on disk under a fresh id.
+            _external.value = if (state is ExternalOpen.State.Absent) {
+                val healed = repair.repair(localId, MediaFileRole.ORIGINAL)
+                if (healed != null && healed != fileId) {
+                    _ui.update { it.copy(fileId = healed) }
+                    externalOpen.state(healed)
+                } else {
+                    state
+                }
+            } else {
+                state
+            }
+        }
     }
 
     /**
@@ -489,6 +545,15 @@ class PlayerViewModel @Inject constructor(
         error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ||
             error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
             "This device can't decode that file."
+        // Everything the streaming source gives up on lands here, and ExoPlayer's own
+        // message for it is the bare string "Source error" — which is what the user
+        // saw, and which says nothing about what to do. The source has already
+        // retried and tried to re-resolve the file by this point, so the honest
+        // reading is that Telegram would not serve it right now.
+        error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
+            error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+            "Telegram wouldn't serve this file just now. Retry usually fixes it; if it " +
+                "keeps failing, the post may have been deleted from the channel."
         else -> error.localizedMessage ?: "Playback failed."
     }
 

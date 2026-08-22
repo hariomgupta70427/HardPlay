@@ -1,7 +1,8 @@
 package com.hardplay.playback
 
 import android.media.MediaDataSource
-import com.hardplay.telegram.GatewayError
+import com.hardplay.data.repo.MediaFileRepair
+import com.hardplay.data.repo.MediaFileRole
 import com.hardplay.telegram.GatewayResult
 import com.hardplay.telegram.TelegramFileState
 import com.hardplay.telegram.TelegramGateway
@@ -43,9 +44,17 @@ class TelegramMediaDataSource(
     private val sizeBytes: Long,
     private val remoteFileId: String? = null,
     private val byteBudget: Long = DEFAULT_BYTE_BUDGET,
+    /**
+     * The row this file belongs to, and [repair], so a refused handle can be
+     * re-established the same way playback does it. Optional because the budgeted
+     * frame sweep is allowed to give up on an item — an undecoded frame costs a
+     * softer thumbnail, not a failure the user sees.
+     */
+    private val localId: Long = 0L,
+    private val repair: MediaFileRepair? = null,
 ) : MediaDataSource() {
 
-    /** Reassignable: a stale session id is healed in place from [remoteFileId]. */
+    /** Reassignable: a refused id is healed in place. See [request]. */
     private var fileId: Int = initialFileId
 
     /** Cancelled by [close]; unblocks any wait in flight. */
@@ -153,18 +162,20 @@ class TelegramMediaDataSource(
         when (val first = gateway.requestRange(fileId, position, READ_AHEAD_BYTES)) {
             is GatewayResult.Success -> first.value
             is GatewayResult.Failure -> {
-                // Session file ids die when TDLib's database is recreated, which happens
-                // on re-login. The persistent remote id survives, so it is worth exactly
-                // one retry before giving up on this item.
-                val remote = remoteFileId
-                if (first.error != GatewayError.FILE_UNAVAILABLE || remote.isNullOrEmpty()) {
+                // Two things go stale: the session file id, which dies when TDLib's
+                // database is recreated, and the file reference inside the persistent
+                // id, which Telegram rotates. Only re-reading the message fixes the
+                // second, so that is tried first; the remote id is the fallback for a
+                // row that is no longer in the library.
+                val healed = repair?.repair(localId, MediaFileRole.ORIGINAL)
+                    ?: remoteFileId
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { gateway.fileIdForRemoteId(it, TelegramMediaKind.VIDEO).valueOrNull }
+
+                if (healed == null || healed == fileId) {
                     throw IOException("Telegram refused file $fileId: ${first.message}")
                 }
-                val healed = gateway.fileIdForRemoteId(remote, TelegramMediaKind.VIDEO)
-                if (healed !is GatewayResult.Success) {
-                    throw IOException("Telegram lost file $fileId: ${first.message}")
-                }
-                fileId = healed.value
+                fileId = healed
                 when (val retry = gateway.requestRange(fileId, position, READ_AHEAD_BYTES)) {
                     is GatewayResult.Success -> retry.value
                     is GatewayResult.Failure ->

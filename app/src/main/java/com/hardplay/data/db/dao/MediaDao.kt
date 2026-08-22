@@ -44,6 +44,11 @@ interface MediaDao {
      * @param tagCount size of [tagIds]. Selected tags are ANDed — picking a
      *   second tag narrows the grid, which is what a filter is for.
      * @param sort ordinal of [com.hardplay.data.model.LibrarySort].
+     * @param shuffleSeed seed for [com.hardplay.data.model.LibrarySort.SHUFFLE]. One
+     *   value per process, so the order holds still while paging walks it and changes on
+     *   the next launch. `ORDER BY random()` cannot be used: it is re-evaluated per
+     *   query, so page two would be drawn from a different permutation than page one and
+     *   the grid would repeat and skip items as you scrolled.
      */
     @Query(
         """
@@ -67,6 +72,7 @@ interface MediaDao {
             CASE :sort WHEN 4 THEN title END COLLATE NOCASE ASC,
             CASE :sort WHEN 5 THEN favouritedAt END DESC,
             CASE :sort WHEN 6 THEN lastPlayedAt END DESC,
+            CASE :sort WHEN 7 THEN (localId * :shuffleSeed) % 2147483647 END ASC,
             date DESC, localId DESC
         """,
     )
@@ -82,6 +88,7 @@ interface MediaDao {
         favouritesOnly: Int,
         hidePairedStills: Int,
         sort: Int,
+        shuffleSeed: Int,
     ): PagingSource<Int, LibraryRow>
 
     /** Row count for the same filter, so the header can say how many items the
@@ -290,6 +297,35 @@ interface MediaDao {
 
     @Query("UPDATE media SET tagsParsed = 1 WHERE localId = :localId")
     suspend fun markTagsParsed(localId: Long)
+
+    /**
+     * Write back file ids that were re-resolved after Telegram refused the stored
+     * ones.
+     *
+     * Deliberately narrow. The alternative — running the whole row through `upsert`
+     * — would re-derive `tagsParsed` and re-run pairing over an item whose caption
+     * has not changed, when all that actually went stale is a handle.
+     *
+     * Persisting the repair is what makes it worth doing once instead of on every
+     * scroll: the grid cell, the player, the photo viewer and the open-in-another-app
+     * action all read these columns, so a repair paid by any one of them fixes the
+     * rest. See `MediaFileRepair`.
+     */
+    @Query(
+        """
+        UPDATE media
+        SET fileId = :fileId,
+            thumbnailFileId = :thumbnailFileId,
+            previewFileId = :previewFileId
+        WHERE localId = :localId
+        """,
+    )
+    suspend fun refreshFileIds(
+        localId: Long,
+        fileId: Int,
+        thumbnailFileId: Int?,
+        previewFileId: Int?,
+    )
 
     /**
      * Record a decoded frame as this item's artwork.

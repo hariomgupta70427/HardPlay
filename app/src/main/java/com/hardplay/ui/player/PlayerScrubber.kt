@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.hardplay.ui.components.rememberHaptics
 import com.hardplay.ui.theme.HardPlayTheme
 import com.hardplay.ui.theme.Motion
+import com.hardplay.ui.theme.Space
 
 /**
  * The seek bar.
@@ -77,9 +78,15 @@ fun PlayerScrubber(
     Box(
         modifier
             .fillMaxWidth()
-            // A 28dp touch target over a 2dp line: the visual can be hairline-thin
-            // while still being grabbable, which is the entire trick.
-            .height(28.dp)
+            // A full 48dp touch target over a 2dp line: the visual can be
+            // hairline-thin while still being grabbable, which is the entire trick.
+            //
+            // Was 28dp. The scrubber is the most-used control in the app and the one
+            // that punishes a near-miss hardest — a missed grab on a seek bar is a
+            // stray tap on the video, which toggles the chrome instead. 48dp is also
+            // simply the minimum, and there is no shortage of room at the bottom of a
+            // full-screen player to justify shaving it.
+            .height(Space.touch)
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 detectTapGestures(

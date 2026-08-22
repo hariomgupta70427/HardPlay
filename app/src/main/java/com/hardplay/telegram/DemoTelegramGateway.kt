@@ -369,6 +369,29 @@ class DemoTelegramGateway @Inject constructor(
         return GatewayResult.Success(fileIdFor(chatId, messageId, thumbnail = false))
     }
 
+    /**
+     * Demo mode's file ids never go stale, so this is a lookup rather than a repair
+     * — but it has to answer, because the real gateway's repair path is exercised by
+     * every playback and a demo that failed it would look like the bug it fixes.
+     */
+    override suspend fun refreshMessage(
+        chatId: Long,
+        messageId: Long,
+    ): GatewayResult<TelegramMessage> {
+        val channel = DEMO_CHANNELS.firstOrNull { it.chatId == chatId }
+            ?: return GatewayResult.Failure(GatewayError.CHAT_NOT_FOUND, "Unknown demo channel.")
+        if (messageId <= 0L || messageId > channel.messageCount.toLong()) {
+            return GatewayResult.Failure(
+                GatewayError.FILE_UNAVAILABLE,
+                "No demo message $messageId in channel $chatId.",
+            )
+        }
+        // demoMessage is deterministic per (chat, message), so this returns exactly
+        // what the indexer stored — which is the point: a repair must not invent a
+        // different item.
+        return GatewayResult.Success(demoMessage(channel, messageId))
+    }
+
     // ----------------------------------------------------------------- cache
 
     override suspend fun applyCacheLimit(bytes: Long) = Unit

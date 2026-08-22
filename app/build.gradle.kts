@@ -118,8 +118,17 @@ android {
         applicationId = "com.northline.archive"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+
+        // Derived from versionName rather than counted, as major*10000 + minor*100 +
+        // patch. Android only requires this to increase, so the value is free to carry
+        // information — and a code that can be read back as a version is one fewer thing
+        // to keep in step by hand. 1.2.0 -> 10200.
+        //
+        // Everything user-visible reads `BuildConfig.VERSION_NAME`: the Settings footer,
+        // the Manage tab, and the `applicationVersion` TDLib reports to Telegram for the
+        // session. There is no second copy of this string to update.
+        versionCode = 10_200
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -208,6 +217,20 @@ android {
             "/META-INF/DEPENDENCY",
             "DebugProbesKt.bin",
         )
+    }
+
+    testOptions {
+        unitTests {
+            // Unit tests run on the JVM with a stub android.jar whose methods throw
+            // by default. `MediaFileRepair` logs on its failure path, and a test of
+            // that path is exactly the one worth having, so an unmocked `Log.w` must
+            // not be what fails it.
+            //
+            // Anything that genuinely depends on framework behaviour — `android.net.Uri`
+            // escaping, for one — belongs in `androidTest` instead, because here it
+            // would silently return a default and pass without testing anything.
+            isReturnDefaultValues = true
+        }
     }
 
     // -----------------------------------------------------------------------

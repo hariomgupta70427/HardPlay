@@ -8,6 +8,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import com.hardplay.data.repo.MediaFileRepair
 import com.hardplay.telegram.TelegramGateway
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -30,6 +31,7 @@ import javax.inject.Singleton
 class TelegramPlayerFactory @Inject constructor(
     @ApplicationContext private val context: Context,
     private val gateway: TelegramGateway,
+    private val repair: MediaFileRepair,
 ) {
 
     fun create(): ExoPlayer {
@@ -62,7 +64,7 @@ class TelegramPlayerFactory @Inject constructor(
 
         return ExoPlayer.Builder(context, renderers)
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(TelegramDataSource.Factory(gateway)),
+                DefaultMediaSourceFactory(TelegramDataSource.Factory(gateway, repair)),
             )
             .setTrackSelector(DefaultTrackSelector(context))
             .setLoadControl(loadControl)

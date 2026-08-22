@@ -28,4 +28,10 @@ tools/*.log
 docs/ui-overhaul-plan.md
 HardPlay_PRD.md
 CLAUDE.md
+
+# Local device/debug artefacts. Never publish: a logcat capture contains chat ids
+# and file paths, a pulled APK contains the compiled api_id, and a screenshot of
+# this app is either blank (FLAG_SECURE) or shows real library content.
+tools/shots/
+tools/tmp/
 CLAUDE.md

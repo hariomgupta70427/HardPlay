@@ -13,6 +13,7 @@ import com.hardplay.data.model.LibraryQuery
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.random.Random
 
 /**
  * Reads for the library screen.
@@ -26,6 +27,25 @@ class LibraryRepository @Inject constructor(
     private val mediaDao: MediaDao,
     private val tagDao: TagDao,
 ) {
+
+    /**
+     * Seed for [com.hardplay.data.model.LibrarySort.SHUFFLE] — one per app launch.
+     *
+     * A field on a `@Singleton` is precisely the lifetime wanted: the order holds still
+     * for as long as the process lives, so paging can walk it without repeating or
+     * skipping rows, and it is different the next time the app is opened. That is the
+     * whole feature — a library read newest-first only ever shows its newest few hundred
+     * items, and the rest might as well not be indexed.
+     *
+     * `ORDER BY random()` is the obvious version and it is wrong: SQLite re-evaluates it
+     * per query, so page two would come from a different permutation than page one and
+     * the grid would show duplicates and holes as it scrolled. Multiplying a stable
+     * `localId` by a per-process seed is a deterministic permutation instead.
+     *
+     * Never zero: `localId * 0` collapses every row to the same key and the shuffle
+     * silently degrades to the `date DESC, localId DESC` tie-breaker.
+     */
+    private val shuffleSeed: Int = Random.nextInt(1, Int.MAX_VALUE)
 
     fun pager(query: LibraryQuery): Flow<PagingData<LibraryRow>> {
         val args = QueryArgs.from(query)
@@ -56,6 +76,7 @@ class LibraryRepository @Inject constructor(
                     favouritesOnly = args.favouritesOnly,
                     hidePairedStills = args.hidePairedStills,
                     sort = query.sort.ordinal,
+                    shuffleSeed = shuffleSeed,
                 )
             },
         ).flow

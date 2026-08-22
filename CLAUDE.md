@@ -61,6 +61,17 @@ outputs, not source** (gitignored). The app must compile with or without them:
   ```
 - No device was attached during initial setup; `x86_64` is in `abiFilters` so an
   emulator works for testing.
+- **On-device UI cannot be inspected from the host.** `blockScreenshots` defaults to
+  on, so `adb exec-out screencap` returns a black frame — the flag working correctly —
+  and the biometric gate cannot be satisfied over adb. Visual verification therefore
+  needs either a human looking at the phone, or the screenshot setting turned off in
+  Settings first. Logcat is unaffected and is the useful channel: our own tags are
+  `HardPlay/Stream`, `HardPlay/Repair` and `HardPlay/TDLib`.
+- **The installed app is `com.northline.archive`**, not `com.hardplay` — that is the
+  discreet-disguise `applicationId`, and `pm list packages | grep hardplay` finds
+  nothing. Debug builds add `.debug`, so they are a *separate* app with an empty
+  database: testing a fix against a real library means building `release` and
+  `adb install -r`, which preserves data as long as the keystore matches.
 - WSL2 Ubuntu (`wsl -d Ubuntu`, root, 16 cores) is the TDLib build box and has
   all deps installed. `/build/td` holds the checkout.
 
@@ -191,6 +202,13 @@ Recorded because each one has a cheaper-looking alternative that is wrong:
 | Saved / History | Their own pagers, not `pageLibrary` with a flag | Both are ordered by *when you acted* — saved at, last played — so routing them through the shared query leaves them obeying the Library sort control, and changing the grid's sort silently reshuffles Saved |
 | FileProvider root | `<files-path path="../no_backup/tdlib-files/">` | FileProvider canonicalises each root, so this resolves to TDLib's real media directory. Relocating `filesDirectory` under `files/` instead would orphan every chunk already downloaded |
 | `FLAG_SECURE` | A setting (`blockScreenshots`, default on) rather than a constant | The flag marks the window as protected content and some devices render picture-in-picture black because of it. Silently dropping the flag to make PiP work would trade a privacy promise for a feature without saying so |
+| Cache cap | `optimizeStorage` sets **`size` only**; `ttl`/`count`/`immunityDelay` are `-1`, and the call returns early when the cache is already under the cap | Every numeric field of `optimizeStorage` is a *limit*, and TDLib's "no limit" is `-1`, not `0`. Passing `0` — which reads like "unset" — means `count = 0` → **keep zero files**, `ttl = 0` → every file is past its age limit, `immunityDelay = 0` → TDLib may delete the file it is currently downloading. So "cap the cache at 4 GB" **deleted the entire media cache**, on every launch and every visit to Settings. This is the first half of the "old videos stop playing" bug |
+| Cache wipe | `clearCache` spells out its own `optimizeStorage` instead of calling `applyCacheLimit(0)` | "Hold to a cap" and "delete the lot" want opposite values for `ttl`, `count` and `immunityDelay`. Sharing one call is exactly what let a total wipe masquerade as a cap for a whole release |
+| File repair | `MediaFileRepair` re-reads the **message** via `refreshMessage(chatId, messageId)`; `getRemoteFile` is a fallback only | The second half of the bug. Telegram rotates the *file reference* inside every remote file id, and TDLib repairs an expired one by itself **only for a file it can trace to a source** — the message. `getRemoteFile` is documented as an *offline* method: it parses the id string, never contacts the server, and attaches no source, so it hands back an id that looks valid and refuses to download. That is why content indexed recently played while content indexed weeks earlier failed permanently, and why the repair the app already had could not fix either. `(chatId, messageId)` is the only addressing that never expires |
+| Repair persistence | Every repair writes fresh ids back with `MediaDao.refreshFileIds`, and is memoised — successes for 5 min, **failures for 45 s** | An unpersisted repair is re-paid on every scroll, and only by whichever caller bothered to ask — so the grid, the player, the photo viewer and open-in-another-app each failed separately. The negative memo matters just as much: a message the channel has deleted can never be repaired, and without it every scroll past that cell fires another round trip forever. One shared `Mutex`, not one per item: forty visible cells discovering the same dead item at once is how an account earns a flood-wait |
+| Stale-handle test | A set of real TDLib error strings, plus treating `UNKNOWN` as worth one repair attempt | The previous test was `message.contains("FILE_")` — a literal underscore. Every error that actually occurs here (`Invalid file identifier`, `File not found`, `Can't download file`) is spelled with spaces, so it matched none of them and the repair path was dead code precisely when it was needed. A wasted repair costs one round trip; a missed one costs the item permanently, and that asymmetry decides the default |
+| Source errors | `TelegramDataSource` repairs once and retries with backoff before throwing; `PlayerViewModel.explain` names `ERROR_CODE_IO_UNSPECIFIED` | Every `IOException` out of the data source reaches the user as ExoPlayer's `ERROR_CODE_IO_UNSPECIFIED`, whose message is the literal string **"Source error"** — so anything the source gave up on became that, with no cause and no advice. One 45 s range timeout on a train used to end playback outright |
+| File handle | `adoptFile` reopens when TDLib's reported path changes | TDLib deletes and re-creates files, so a descriptor opened once can end up serving a file that is no longer the one being played. Following the path on every window refresh is nearly free, because streaming reaches the download edge constantly |
 
 ## Next session — pick up here
 

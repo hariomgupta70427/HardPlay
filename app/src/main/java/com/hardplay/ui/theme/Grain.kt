@@ -39,23 +39,43 @@ import kotlin.random.Random
 private const val TILE_PX = 128
 private const val TILE_COUNT = 3
 
-/** Below 0.03 it's invisible; above 0.08 it reads as a dirty screen. */
-const val GRAIN_DEFAULT = 0.045f
+/** Fraction of pixels that carry a speck. The rest stay fully transparent — see below. */
+private const val SPECK_DENSITY = 0.30f
+
+/** Below 0.035 it's invisible; above 0.09 it reads as a dirty screen. */
+const val GRAIN_DEFAULT = 0.055f
 
 /**
  * Fixed seed, so the grain is byte-identical on every launch and every device.
  * It's part of the app's identity, not random noise.
+ *
+ * **Sparse bone specks, and no black ones.** The tile used to give *every* pixel a
+ * random alpha and colour half of them black, on the reasoning that dark specks stop
+ * the layer reading as a lightening haze. On #08070A they cannot: a black speck
+ * composited over near-black is a no-op, so half the tile did nothing and the visible
+ * result was precisely the uniform haze it was meant to prevent — every pixel lifted by
+ * about a percent, which raises the black point of an OLED panel and reads as a washed
+ * screen rather than as texture.
+ *
+ * Grain on a near-black ground can only be made of added light, so the fix is to spend
+ * that light on fewer pixels: 30% coverage at a higher alpha carries the same average
+ * lift with three times the local contrast, which is the difference between texture and
+ * fog. The dithering that motivated the layer in the first place — banding wherever a
+ * scrim fades — works better this way too, because dithering wants variance, not a
+ * uniform offset.
  */
 private val grainTiles: List<ImageBitmap> by lazy {
     val random = Random(0x0B105EED)
+    val speckCutoff = (SPECK_DENSITY * 255).toInt()
     List(TILE_COUNT) {
         val pixels = IntArray(TILE_PX * TILE_PX)
         for (i in pixels.indices) {
-            // Light and dark specks in equal measure. Dark specks are nearly
-            // invisible on ink black by themselves, but without them the layer
-            // reads as a uniform lightening haze instead of as texture.
-            val alpha = random.nextInt(0, 256) shl 24
-            pixels[i] = if (random.nextBoolean()) alpha or 0x00F5F0E8 else alpha
+            pixels[i] = if (random.nextInt(0, 256) < speckCutoff) {
+                // Alpha floor of 90: a speck at alpha 3 is not a speck, it is haze.
+                (random.nextInt(90, 256) shl 24) or 0x00F5F0E8
+            } else {
+                0
+            }
         }
         Bitmap.createBitmap(pixels, TILE_PX, TILE_PX, Bitmap.Config.ARGB_8888).asImageBitmap()
     }
@@ -118,16 +138,23 @@ fun Modifier.vignette(
 /**
  * An ember bloom bled in from off the top-left corner at very low alpha, so the
  * screen reads as having a light source somewhere above it.
+ *
+ * 0.06, down from 0.10. This draws on *every screen in the app*, which makes it the
+ * single largest ember surface in the design system — and the rule is that the accent
+ * marks the one important thing on a screen. At 10% it was a visible warm cast behind
+ * the masthead, competing with the type it sat under and spending the accent before any
+ * control had a chance to use it. At 6% it does the one job it is here for: stop a flat
+ * fill from reading as a flat fill.
  */
 fun Modifier.emberBloom(
     accent: Color,
-    strength: Float = 0.10f,
+    strength: Float = 0.06f,
 ): Modifier = drawWithCache {
     val brush = Brush.radialGradient(
         0f to accent.copy(alpha = strength),
         1f to Color.Transparent,
-        center = Offset(size.width * 0.12f, -size.height * 0.05f),
-        radius = size.minDimension * 1.1f,
+        center = Offset(size.width * 0.18f, -size.height * 0.08f),
+        radius = size.minDimension * 0.95f,
     )
     onDrawBehind { drawRect(brush) }
 }

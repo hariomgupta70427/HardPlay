@@ -45,7 +45,13 @@ class SettingsStore @Inject constructor(
             hidePairedStills = prefs[Keys.HIDE_PAIRED_STILLS] ?: true,
             sharpVideoArtwork = prefs[Keys.SHARP_VIDEO_ARTWORK] ?: true,
             backgroundSync = prefs[Keys.BACKGROUND_SYNC] ?: true,
-            librarySort = LibrarySort.fromOrdinal(prefs[Keys.LIBRARY_SORT] ?: 0),
+            // No `?: 0`. Zero is NEWEST, and the default order is now SHUFFLE — a
+            // library read newest-first only ever surfaces its newest few hundred items.
+            // An explicit choice still persists and still wins; this is only what applies
+            // before one has been made.
+            librarySort = LibrarySort.fromOrdinal(
+                prefs[Keys.LIBRARY_SORT] ?: LibrarySort.SHUFFLE.ordinal,
+            ),
             gridColumns = prefs[Keys.GRID_COLUMNS] ?: 0,
             cardAspect = CardAspect.fromOrdinal(prefs[Keys.CARD_ASPECT] ?: 0),
             skipSeconds = prefs[Keys.SKIP_SECONDS] ?: DEFAULT_SKIP_SECONDS,

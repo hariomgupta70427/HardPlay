@@ -4,6 +4,7 @@ import android.content.Context
 import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.hardplay.data.repo.MediaFileRepair
 import com.hardplay.telegram.TelegramGateway
 import com.hardplay.ui.image.PosterFetcher
 import com.hardplay.ui.image.PosterKeyer
@@ -13,6 +14,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import okio.Path.Companion.toOkioPath
 import java.io.File
 import javax.inject.Singleton
@@ -39,29 +42,67 @@ object ImageModule {
     fun imageLoader(
         @ApplicationContext context: Context,
         gateway: TelegramGateway,
-    ): ImageLoader = ImageLoader.Builder(context)
-        .components {
-            add(PosterKeyer())
-            add(PosterFetcher.Factory(gateway))
+        repair: MediaFileRepair,
+        @AppScope appScope: CoroutineScope,
+    ): ImageLoader {
+        purgeLegacyCache(context, appScope)
+        return ImageLoader.Builder(context)
+            .components {
+                add(PosterKeyer())
+                add(PosterFetcher.Factory(gateway, repair))
+            }
+            .memoryCache {
+                MemoryCache.Builder(context)
+                    // A poster grid scrolls fast and revisits rows constantly, so it
+                    // is worth more than Coil's default share of the heap.
+                    .maxSizePercent(0.28)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(File(context.cacheDir, POSTER_CACHE_DIR).toOkioPath())
+                    .maxSizeBytes(POSTER_CACHE_BYTES)
+                    .build()
+            }
+            // Decoded posters are small and the grid is dense; a hardware bitmap can't
+            // be read back for the shared-element transition, so it stays off.
+            .allowHardware(false)
+            .crossfade(false)
+            .build()
+    }
+
+    /**
+     * Delete the pre-fix cache directory, once.
+     *
+     * Everything in `poster-cache` was keyed on a TDLib **session** file id (see
+     * `PosterSource.Rung.Remote.cacheKey`), so any device that had re-logged in was
+     * serving one item's artwork for another out of it. The new keys simply never hit
+     * those entries — but 512 MB of them would sit there being slowly evicted while the
+     * user waits, so the directory is renamed and the old one removed rather than left
+     * to age out. Costs one `listFiles` walk on the launch after upgrading and nothing
+     * afterwards, because the directory is gone.
+     *
+     * Off the main thread and fire-and-forget: this is housekeeping, and a failure only
+     * means some dead bytes stay on disk until the OS reclaims the cache directory.
+     * [AppScope] is already dispatched on IO, so no dispatcher is named here.
+     */
+    private fun purgeLegacyCache(context: Context, appScope: CoroutineScope) {
+        appScope.launch {
+            runCatching {
+                val legacy = File(context.cacheDir, LEGACY_POSTER_CACHE_DIR)
+                if (legacy.isDirectory) legacy.deleteRecursively()
+            }
         }
-        .memoryCache {
-            MemoryCache.Builder(context)
-                // A poster grid scrolls fast and revisits rows constantly, so it
-                // is worth more than Coil's default share of the heap.
-                .maxSizePercent(0.28)
-                .build()
-        }
-        .diskCache {
-            DiskCache.Builder()
-                .directory(File(context.cacheDir, "poster-cache").toOkioPath())
-                .maxSizeBytes(POSTER_CACHE_BYTES)
-                .build()
-        }
-        // Decoded posters are small and the grid is dense; a hardware bitmap can't
-        // be read back for the shared-element transition, so it stays off.
-        .allowHardware(false)
-        .crossfade(false)
-        .build()
+    }
+
+    /**
+     * Bumped when the key scheme changed.
+     *
+     * A cache whose keys mean something different from what its entries were stored
+     * under is worse than a cold one, so the directory name carries the scheme version.
+     */
+    private const val POSTER_CACHE_DIR = "poster-cache-v2"
+    private const val LEGACY_POSTER_CACHE_DIR = "poster-cache"
 
     /**
      * 512 MB of cached artwork.

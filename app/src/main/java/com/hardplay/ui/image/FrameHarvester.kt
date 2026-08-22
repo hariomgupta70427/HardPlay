@@ -6,6 +6,7 @@ import android.os.Build
 import com.hardplay.data.db.dao.MediaDao
 import com.hardplay.data.db.entity.MediaEntity
 import com.hardplay.data.prefs.SettingsStore
+import com.hardplay.data.repo.MediaFileRepair
 import com.hardplay.di.IoDispatcher
 import com.hardplay.playback.TelegramMediaDataSource
 import com.hardplay.telegram.TelegramGateway
@@ -46,6 +47,7 @@ class FrameHarvester @Inject constructor(
     private val mediaDao: MediaDao,
     private val posterStore: PosterStore,
     private val settings: SettingsStore,
+    private val repair: MediaFileRepair,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
@@ -134,6 +136,8 @@ class FrameHarvester @Inject constructor(
             initialFileId = entity.fileId,
             sizeBytes = entity.fileSizeBytes,
             remoteFileId = entity.remoteFileId,
+            localId = entity.localId,
+            repair = repair,
         )
         val retriever = MediaMetadataRetriever()
         var frame: Bitmap? = null

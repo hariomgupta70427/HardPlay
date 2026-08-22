@@ -1,5 +1,6 @@
 package com.hardplay.ui.theme
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.LocalTextStyle
@@ -9,6 +10,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 
@@ -88,9 +90,21 @@ fun HardPlayTheme(
     colors: HardPlayColors = HardPlayDarkColors,
     content: @Composable () -> Unit,
 ) {
-    // Ember ripple instead of the default white-on-primary. rippleAlpha is left
-    // at the Material default; only the hue changes.
-    val rippleConfig = RippleConfiguration(color = colors.accentHigh)
+    // The app's press feedback, handed to `Modifier.clickable` everywhere. See
+    // FlatPressIndication: without this, every hand-rolled row in every screen file
+    // presses differently from every button in this package.
+    val indication = remember(colors) {
+        FlatPressIndication(
+            color = colors.type,
+            pressAlpha = 0.06f,
+            focusAlpha = 0.03f,
+        )
+    }
+
+    // Bone, not ember. Only the stock M3 components that ask for `ripple()` explicitly
+    // still draw one, and when they do it should read as the same wash the rest of the
+    // app uses rather than as an orange splash from a different design system.
+    val rippleConfig = RippleConfiguration(color = colors.type)
 
     CompositionLocalProvider(
         LocalHardPlayColors provides colors,
@@ -98,6 +112,7 @@ fun HardPlayTheme(
         LocalHardPlayShapes provides HardPlayShapeSet,
         LocalContentColor provides colors.type,
         LocalTextStyle provides HardPlayType.body.copy(color = colors.type),
+        LocalIndication provides indication,
         LocalRippleConfiguration provides rippleConfig,
     ) {
         MaterialTheme(
@@ -112,6 +127,11 @@ fun HardPlayTheme(
 /**
  * Maps our scale onto Material's slots so that any M3 component we don't wrap
  * still renders in Archivo rather than Roboto.
+ *
+ * `labelLarge` deliberately gets `titleSmall` rather than `label`: our `label` is
+ * tracked all-caps, set in caps by its call sites in Buttons.kt, and a stock component
+ * feeding it sentence-case text would get 0.1em-tracked lowercase — which looks like a
+ * bug rather than a style.
  */
 private fun materialTypographyFrom(t: HardPlayTypography) = androidx.compose.material3.Typography(
     displayLarge = t.display,
@@ -126,8 +146,8 @@ private fun materialTypographyFrom(t: HardPlayTypography) = androidx.compose.mat
     bodyLarge = t.body,
     bodyMedium = t.body,
     bodySmall = t.bodySmall,
-    labelLarge = t.label,
-    labelMedium = t.label,
+    labelLarge = t.titleSmall,
+    labelMedium = t.labelSmall,
     labelSmall = t.labelSmall,
 )
 

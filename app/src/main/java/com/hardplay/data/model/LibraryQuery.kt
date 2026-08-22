@@ -17,10 +17,29 @@ enum class LibrarySort(val label: String) {
     TITLE("A–Z"),
     SAVED("Recently saved"),
     RECENT("Recently played"),
+
+    /**
+     * A different order every time the app is opened — the default.
+     *
+     * A library of this size read newest-first means the same few hundred items are the
+     * only ones ever seen, and the far end might as well not be indexed. Shuffle makes
+     * the whole library reachable by scrolling, which is the point of having it.
+     *
+     * The order is stable *within* a launch and different *between* launches, and that
+     * distinction is not cosmetic: paging asks for offsets from the same query
+     * repeatedly, so an order that re-rolled per query — which is what a bare
+     * `ORDER BY random()` gives you — would repeat and skip items as you scroll. The
+     * seed therefore lives for the process; see `LibraryRepository.shuffleSeed`.
+     *
+     * **Appended deliberately.** The ordinal is what `SettingsStore` persists and what
+     * the `CASE :sort` ladder in `MediaDao` switches on, so inserting this anywhere but
+     * the end would silently re-point every saved preference at a different sort.
+     */
+    SHUFFLE("Shuffle"),
     ;
 
     companion object {
-        fun fromOrdinal(value: Int): LibrarySort = entries.getOrElse(value) { NEWEST }
+        fun fromOrdinal(value: Int): LibrarySort = entries.getOrElse(value) { SHUFFLE }
     }
 }
 

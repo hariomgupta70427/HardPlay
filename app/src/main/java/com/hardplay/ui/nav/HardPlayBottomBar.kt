@@ -145,8 +145,12 @@ private fun BottomBarItem(
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
-                text = tab.label,
-                style = HardPlayTheme.type.labelSmall,
+                text = tab.label.uppercase(),
+                // `overline` rather than `labelSmall`: these are the smallest labels in
+                // the app, and tracked caps hold together at that size where a
+                // sentence-case 13sp label goes mushy. It also makes the bar read as
+                // navigation rather than as five more pieces of body text.
+                style = HardPlayTheme.type.overline,
                 color = contentColor,
             )
             if (count != null) {

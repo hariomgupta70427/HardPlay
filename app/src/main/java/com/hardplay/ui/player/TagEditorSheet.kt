@@ -101,7 +101,7 @@ fun TagEditorSheet(
                 .imePadding()
                 .padding(horizontal = Space.gutter),
         ) {
-            Text(text = "TAGS", style = HardPlayTheme.type.overline, color = colors.accent)
+            Text(text = "TAGS", style = HardPlayTheme.type.overline, color = colors.muted)
             Box(Modifier.height(4.dp))
             Text(
                 text = title,

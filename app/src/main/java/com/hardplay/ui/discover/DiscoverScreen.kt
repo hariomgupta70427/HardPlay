@@ -245,11 +245,27 @@ private fun SearchRow(
                     )
                 }
                 Box(Modifier.weight(1f))
-                Text(
-                    text = "${Format.count(resultCount)} found",
-                    style = HardPlayTheme.type.timecodeSmall,
-                    color = colors.muted,
-                )
+                // The count carries the weight; the word does not.
+                //
+                // This was one grey `"12 found"` at the end of the filter row — a
+                // sentence in the muted colour, sitting where the eye had no reason to
+                // go, contributing nothing to the composition. Splitting it lets the
+                // number read as a figure in bone with tabular digits (so it does not
+                // reflow as you type) against a tracked micro-caps label. Same
+                // information, but it now looks like a readout rather than a leftover.
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = Format.count(resultCount),
+                        style = HardPlayTheme.type.numeral,
+                        color = colors.type,
+                    )
+                    Text(
+                        text = "FOUND",
+                        style = HardPlayTheme.type.overline,
+                        color = colors.muted,
+                        modifier = Modifier.padding(start = Space.xs, bottom = 1.dp),
+                    )
+                }
             }
         }
     }

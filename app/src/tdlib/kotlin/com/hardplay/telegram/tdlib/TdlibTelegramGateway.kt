@@ -321,7 +321,7 @@ internal class TdlibTelegramGateway(
                 message.contains("USERNAME_NOT_OCCUPIED") ||
                 message.contains("CHANNEL_INVALID") ||
                 message.contains("CHANNEL_PRIVATE") -> GatewayError.CHAT_NOT_FOUND
-            message.contains("FILE_", ignoreCase = true) -> GatewayError.FILE_UNAVAILABLE
+            STALE_FILE.containsMatchIn(message) -> GatewayError.FILE_UNAVAILABLE
             error.code == CODE_UNAUTHORISED -> GatewayError.NOT_AUTHENTICATED
             error.code == CODE_UNAVAILABLE -> GatewayError.UNAVAILABLE
             error.code >= 500 -> GatewayError.NETWORK
@@ -730,13 +730,31 @@ internal class TdlibTelegramGateway(
         return GatewayResult.Success(readable)
     }
 
-    /** Waits for the contiguous prefix to cover [offset]. Null on timeout. */
+    /**
+     * Waits for the contiguous prefix to cover [offset]. Null on timeout.
+     *
+     * The completed-file disjunct is narrow on purpose. It used to be
+     * `state.isDownloadingCompleted && state.localPath != null`, which accepts a
+     * "finished" file **without checking that the window covers the offset asked
+     * for** — and TDLib's `downloadOffset` sits wherever the last ranged request left
+     * it, so a request for byte 0 made after a read near the tail was answered with a
+     * state whose window starts millions of bytes later. The caller then read into a
+     * hole in a sparse file and got zeroes. Only a genuine read past the end of the
+     * file is allowed through here now; everything else has to wait for real bytes.
+     */
     private suspend fun awaitReadable(fileId: Int, offset: Long): TelegramFileState? =
         withTimeoutOrNull(RANGE_TIMEOUT_MS) {
             observeFile(fileId).first { state ->
-                state.canRead(offset) || (state.isDownloadingCompleted && state.localPath != null)
+                state.canRead(offset) || state.isPastEnd(offset)
             }
         }
+
+    /** True when [offset] is at or beyond the end of a file TDLib has finished. */
+    private fun TelegramFileState.isPastEnd(offset: Long): Boolean =
+        isDownloadingCompleted &&
+            localPath != null &&
+            expectedSize > 0L &&
+            offset >= expectedSize
 
     override fun observeFile(fileId: Int): Flow<TelegramFileState> = flow {
         // Seed from the cache so a subscriber that arrives mid-download knows the
@@ -801,15 +819,88 @@ internal class TdlibTelegramGateway(
             GatewayResult.Success(file.id)
         }
 
+    override suspend fun refreshMessage(
+        chatId: Long,
+        messageId: Long,
+    ): GatewayResult<TelegramMessage> {
+        // Same precondition as getChatHistory: TDLib answers for a chat it has
+        // loaded, and which chats are loaded depends on which lists were fetched.
+        if (!ensureChatKnown(chatId)) {
+            return GatewayResult.Failure(
+                GatewayError.CHAT_NOT_FOUND,
+                "Channel $chatId is not reachable from this account.",
+            )
+        }
+
+        val result = send(
+            TdApi.GetMessage().apply {
+                this.chatId = chatId
+                this.messageId = messageId
+            },
+        )
+        if (result is TdApi.Error) return failure(result)
+
+        val message = result as? TdApi.Message
+            ?: return GatewayResult.Failure(
+                GatewayError.FILE_UNAVAILABLE,
+                "Telegram returned no message $messageId.",
+            )
+
+        // Publish the fresh ids so a reader already parked on observeFile for the
+        // old id is not the last to know. mapMessage is the same translation the
+        // indexer uses, so the caller gets every rung, not just the media file.
+        val mapped = mapMessage(message)
+            ?: return GatewayResult.Failure(
+                GatewayError.FILE_UNAVAILABLE,
+                "Message $messageId no longer carries media.",
+            )
+        return GatewayResult.Success(mapped)
+    }
+
     // ----------------------------------------------------------------- cache
 
+    /**
+     * Enforce the size cap — and **only** the size cap.
+     *
+     * Every numeric field of `optimizeStorage` is a *limit*, and TDLib's way of
+     * saying "no limit of this kind" is `-1`, not `0`. This method used to pass
+     * `ttl = 0`, `count = 0`, `immunityDelay = 0`, which reads like "unset" and
+     * means the exact opposite of it:
+     *
+     *  * `count = 0` — keep **zero files**. The size cap never even got consulted.
+     *  * `ttl = 0` — every file whose last access was more than zero seconds ago
+     *    is past its time limit, i.e. all of them.
+     *  * `immunityDelay = 0` — drop the grace period that stops TDLib deleting a
+     *    file it is still downloading.
+     *
+     * So "cap the cache at 4 GB" actually deleted the entire media cache, including
+     * whatever was streaming at that moment. It ran on every launch and on every
+     * visit to Settings, which is why content played once and then stopped: the
+     * bytes were gone, and for anything old enough that its file reference had also
+     * expired, re-fetching it failed outright and surfaced as a source error.
+     *
+     * Only [size] is set now; TDLib keeps its own defaults for the rest.
+     */
     override suspend fun applyCacheLimit(bytes: Long) {
+        // A cap of zero is not a cap, it is a wipe — and that is clearCache's job,
+        // spelled out there. Refusing it here means no caller can ask for a total
+        // eviction by accident, which is precisely what happened before.
+        if (bytes <= 0L) return
+
+        // Under the cap: return without asking TDLib to delete anything. This is
+        // what makes the call safe to make on every launch and every visit to
+        // Settings, which is where it is made from. An unconditional sweep would
+        // still be entitled to evict the least recently used file even when there
+        // was no pressure at all — including one being watched in a floating window.
+        val held = cacheSizeBytes()
+        if (held in 1..bytes) return
+
         send(
             TdApi.OptimizeStorage().apply {
                 size = bytes
-                ttl = 0
-                count = 0
-                immunityDelay = 0
+                ttl = NO_LIMIT
+                count = NO_LIMIT
+                immunityDelay = NO_LIMIT
                 // Media only. Naming the types keeps the sweep away from TDLib's
                 // own bookkeeping files, which it needs and which are tiny.
                 fileTypes = arrayOf(
@@ -831,9 +922,33 @@ internal class TdlibTelegramGateway(
             ?.filesSize?.toLong() ?: 0L
     }
 
+    /**
+     * Evict everything evictable — the deliberate button in Settings.
+     *
+     * Spelled out rather than delegating to [applyCacheLimit] with a cap of zero.
+     * "Delete the lot" and "hold to a cap" want opposite values for `ttl`, `count`
+     * and `immunityDelay`, and sharing one call is what let a total wipe masquerade
+     * as a cap for a whole release.
+     */
     override suspend fun clearCache(): GatewayResult<Unit> {
-        // size = 0 means "keep nothing you don't have to".
-        applyCacheLimit(0L)
+        send(
+            TdApi.OptimizeStorage().apply {
+                size = 0
+                ttl = 0
+                count = 0
+                immunityDelay = 0
+                fileTypes = arrayOf(
+                    TdApi.FileTypeVideo(),
+                    TdApi.FileTypePhoto(),
+                    TdApi.FileTypeAnimation(),
+                    TdApi.FileTypeDocument(),
+                )
+                chatIds = longArrayOf()
+                excludeChatIds = longArrayOf()
+                returnDeletedFileStatistics = false
+                chatLimit = 0
+            },
+        )
         return GatewayResult.Success(Unit)
     }
 
@@ -873,10 +988,46 @@ internal class TdlibTelegramGateway(
         const val PRIORITY_STREAM = 32
         const val PRIORITY_THUMBNAIL = 16
 
+        /**
+         * `optimizeStorage`'s "no limit of this kind".
+         *
+         * Named because the value that looks like it means this — `0` — is a limit
+         * of zero, and passing it turned a cache cap into a full wipe.
+         */
+        const val NO_LIMIT = -1
+
         const val CODE_UNAUTHORISED = 401
         /** Not a Telegram code — ours, for "the client isn't there". */
         const val CODE_UNAVAILABLE = -1
 
         val FLOOD_WAIT = Regex("""FLOOD_WAIT_(\d+)""")
+
+        /**
+         * Errors that mean "this file handle is no good, get a fresh one".
+         *
+         * Matched as a set of real TDLib and Telegram strings rather than by
+         * sniffing for the substring `FILE_`, which was the previous test. Every
+         * error that actually occurs on this path — `Invalid file identifier`,
+         * `File not found`, `Can't download file` — is spelled with spaces, so the
+         * underscore test matched none of them and the repair path was dead code
+         * exactly when it was needed. `FILE_REFERENCE_EXPIRED` was the only one it
+         * did catch, and that one arrives least often.
+         */
+        val STALE_FILE = Regex(
+            listOf(
+                "invalid file identifier",
+                "invalid file id",
+                "wrong file identifier",
+                "file not found",
+                "file is not found",
+                "can't download file",
+                "file_reference",
+                "file_id_invalid",
+                "location_invalid",
+                "file is unavailable",
+                "unknown file id",
+            ).joinToString("|"),
+            RegexOption.IGNORE_CASE,
+        )
     }
 }
